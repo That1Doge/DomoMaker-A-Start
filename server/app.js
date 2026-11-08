@@ -16,37 +16,50 @@ const port = process.env.PORT || process.env.NODE_PORT || 3000;
 
 const dbURI = process.env.MONGODB_URI || 'mongodb://localhost/DomoMaker';
 mongoose.connect(dbURI).catch((err) => {
-    if(err) {
+    if (err) {
         console.log('Could not connect to database');
         throw err;
     }
 });
 
+const redisClient = redis.createClient({
+    url: process.env.REDISCLOUD_URL,
+});
+
+redisClient.on('error', err => console.log('Redis Client Error', err));
+
+redisClient.connect().then(() => {
 
 
-const app = express();
 
-app.use(helmet());
-app.use('/assets', express.static(path.resolve(`${__dirname}/../hosted`)));
-app.use(favicon(`${__dirname}/../hosted/img/favicon.png`));
-app.use(compression());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+    const app = express();
 
-app.use(session({
-    key: 'seesionid',
-    secret: 'Domo Arigato',
-    resave: false,
-    saveUninitialized: false,
-}));
+    app.use(helmet());
+    app.use('/assets', express.static(path.resolve(`${__dirname}/../hosted`)));
+    app.use(favicon(`${__dirname}/../hosted/img/favicon.png`));
+    app.use(compression());
+    app.use(express.urlencoded({ extended: true }));
+    app.use(express.json());
 
-app.engine('handlebars', expressHandlebars.engine({ defaultLayout: '' }));
-app.set('view engine', 'handlebars');
-app.set('views', `${__dirname}/../views`);
+    app.use(session({
+        key: 'seesionid',
+        store: new RedisStore({
+            client: redisClient,
+        }),
+        secret: 'Domo Arigato',
+        resave: false,
+        saveUninitialized: false,
+    }));
 
-router(app);
+    app.engine('handlebars', expressHandlebars.engine({ defaultLayout: '' }));
+    app.set('view engine', 'handlebars');
+    app.set('views', `${__dirname}/../views`);
 
-app.listen(port, (err) => {
-    if(err) { throw err; }
-    console.log(`Listening on port ${port}`);
+    router(app);
+
+    app.listen(port, (err) => {
+        if (err) { throw err; }
+        console.log(`Listening on port ${port}`);
+    });
+
 });
